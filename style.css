@@ -1,0 +1,140 @@
+:root{
+  --navy:#0b1b33;
+  --navy2:#102a4c;
+  --gold:#f0c060;
+  --gold-dim:#c79a3e;
+  --sea:#13476b;
+  --land:#caa86a;
+  --danger:#e35d4f;
+  --ok:#5ec98a;
+  --panel:rgba(8,18,36,.72);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;background:var(--navy);
+  font-family:"Segoe UI",system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+  color:#eaf2ff;user-select:none;-webkit-user-select:none;}
+#game{display:block;position:fixed;inset:0;width:100%;height:100%;cursor:crosshair;}
+
+/* ---------- HUD ---------- */
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5;}
+#hud > *{pointer-events:auto;}
+
+#topBar{position:absolute;top:14px;left:14px;display:flex;gap:18px;align-items:center;
+  background:var(--panel);backdrop-filter:blur(6px);padding:10px 16px;border-radius:14px;
+  border:1px solid rgba(240,192,96,.25);box-shadow:0 6px 24px rgba(0,0,0,.35);}
+.stat{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;white-space:nowrap;}
+.stat .lbl{color:var(--gold);opacity:.9;}
+.bar{width:140px;height:12px;border-radius:8px;background:rgba(255,255,255,.12);overflow:hidden;}
+#hpFill{height:100%;width:100%;background:linear-gradient(90deg,#5ec98a,#9be8b4);transition:width .15s;}
+.tag{background:rgba(240,192,96,.18);color:var(--gold);padding:3px 10px;border-radius:999px;
+  border:1px solid rgba(240,192,96,.4);}
+#objText{color:#ffe9b0;}
+
+#minimap{position:absolute;top:14px;right:14px;background:var(--panel);border-radius:12px;
+  border:1px solid rgba(240,192,96,.25);box-shadow:0 6px 24px rgba(0,0,0,.35);}
+
+#inventory{position:absolute;left:14px;bottom:14px;display:flex;gap:10px;
+  background:var(--panel);backdrop-filter:blur(6px);padding:10px 14px;border-radius:14px;
+  border:1px solid rgba(240,192,96,.25);box-shadow:0 6px 24px rgba(0,0,0,.35);}
+.res{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:46px;}
+.res .ic{font-size:22px;line-height:1;}
+.res .nm{font-size:10px;opacity:.8;}
+.res .ct{font-size:13px;font-weight:700;color:var(--gold);}
+
+.sell-wood-btn{position:absolute;left:14px;bottom:100px;
+  background:rgba(8,18,36,.8);backdrop-filter:blur(6px);
+  border:1px solid rgba(240,192,96,.4);border-radius:10px;
+  padding:8px 12px;color:#ffd27a;font-size:12px;font-weight:700;
+  cursor:pointer;text-align:center;transition:.12s;
+  box-shadow:0 4px 12px rgba(0,0,0,.3);}
+.sell-wood-btn:hover{background:rgba(240,192,96,.2);transform:translateY(-1px);}
+.sell-wood-btn small{font-size:9px;opacity:.7;display:block;margin-top:2px;}
+
+#equipBar{position:absolute;left:50%;transform:translateX(-50%);bottom:76px;
+  display:flex;gap:6px;pointer-events:none;}
+.eq-slot{display:flex;align-items:center;gap:4px;background:rgba(8,18,36,.72);
+  padding:4px 8px;border-radius:8px;border:1px solid rgba(240,192,96,.3);
+  font-size:11px;white-space:nowrap;backdrop-filter:blur(6px);}
+.eq-slot em{font-style:normal;font-weight:700;font-size:12px;}
+
+#weaponBar{position:absolute;left:50%;transform:translateX(-50%);bottom:14px;
+  display:flex;flex-direction:column;gap:6px;background:var(--panel);backdrop-filter:blur(6px);padding:8px 10px;border-radius:14px;
+  border:1px solid rgba(240,192,96,.25);box-shadow:0 6px 24px rgba(0,0,0,.35);}
+#weaponBar .wp-row{display:flex;gap:5px;align-items:center;}
+#weaponBar .wp-sub{font-size:10px;color:#ffd27a;letter-spacing:.5px;margin-right:4px;opacity:.85;white-space:nowrap;}
+.wp{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  width:50px;height:50px;border-radius:10px;background:rgba(255,255,255,.06);
+  border:2px solid transparent;opacity:.45;transition:.12s;position:relative;}
+.wp .wic{font-size:24px;}
+.wp .wnm{font-size:9px;margin-top:2px;white-space:nowrap;}
+.wp .wlv{position:absolute;top:-6px;right:-6px;background:var(--gold);color:#06223f;
+  font-size:9px;font-weight:800;border-radius:999px;padding:1px 5px;line-height:1.2;
+  border:1px solid #06223f;}
+.wp .wlv.hidden{display:none;}
+.wp.active{opacity:1;border-color:var(--gold);background:rgba(240,192,96,.16);
+  box-shadow:0 0 14px rgba(240,192,96,.35);}
+.wp.locked{opacity:.2;filter:grayscale(1);}
+.wp-equip{width:42px;height:42px;border-radius:8px;}
+.wp-equip .wic{font-size:20px;}
+.wp-equip .wnm{font-size:7px;margin-top:1px;}
+
+#craftPanel{position:absolute;right:14px;bottom:14px;width:252px;
+  background:var(--panel);backdrop-filter:blur(6px);padding:12px 14px;border-radius:14px;
+  border:1px solid rgba(240,192,96,.25);box-shadow:0 6px 24px rgba(0,0,0,.35);
+  max-height:calc(100vh - 120px);overflow-y:auto;}
+.panelTitle{color:var(--gold);font-weight:700;font-size:14px;margin-bottom:6px;}
+.subTitle{font-size:11px;color:rgba(240,192,96,.72);margin:10px 0 4px;font-weight:600;letter-spacing:.4px;}
+.tag.regen{background:rgba(94,201,138,.2);color:#9be8b4;border-color:rgba(94,201,138,.5);}
+.tag.regen.hidden{display:none;}
+.recipe{display:flex;justify-content:space-between;align-items:center;gap:8px;
+  padding:7px 8px;border-radius:9px;margin-bottom:6px;background:rgba(255,255,255,.05);}
+.recipe .rinfo{display:flex;flex-direction:column;gap:1px;}
+.recipe .rname{font-size:13px;font-weight:600;}
+.recipe .rcost{font-size:10px;opacity:.8;}
+.recipe button{border:none;cursor:pointer;font-weight:700;font-size:12px;color:#06223f;
+  background:var(--gold);border-radius:8px;padding:6px 10px;transition:.12s;white-space:nowrap;}
+.recipe button:disabled{background:rgba(255,255,255,.15);color:rgba(255,255,255,.45);cursor:not-allowed;}
+.recipe.owned button{background:var(--ok);color:#04231a;}
+
+#hint{position:absolute;left:50%;transform:translateX(-50%);bottom:84px;
+  font-size:12px;color:rgba(234,242,255,.65);background:rgba(8,18,36,.5);
+  padding:5px 14px;border-radius:999px;white-space:nowrap;}
+
+/* ---------- 覆盖层 ---------- */
+.overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+  padding:24px;overflow-y:auto;
+  background:radial-gradient(circle at 50% 30%,rgba(16,42,76,.92),rgba(5,12,24,.97));}
+.overlay.hidden{display:none;}
+.card{max-width:560px;max-height:calc(100vh - 48px);overflow-y:auto;margin:auto;text-align:center;
+  padding:38px 44px;border-radius:22px;
+  background:linear-gradient(180deg,rgba(16,42,76,.9),rgba(8,18,36,.92));
+  border:1px solid rgba(240,192,96,.35);box-shadow:0 20px 70px rgba(0,0,0,.6);}
+.card h1{font-size:42px;color:var(--gold);letter-spacing:2px;margin-bottom:4px;}
+.card .sub{color:rgba(240,192,96,.7);letter-spacing:6px;font-size:13px;margin-bottom:22px;text-transform:uppercase;}
+.card p{font-size:15px;line-height:1.7;margin-bottom:12px;color:#dce8ff;}
+.card strong{color:var(--gold);}
+.controls{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:18px 0 24px;}
+.controls span{background:rgba(255,255,255,.06);border:1px solid rgba(240,192,96,.25);
+  padding:7px 12px;border-radius:10px;font-size:13px;}
+.controls b{color:var(--gold);}
+button#startBtn,button#restartBtn{font-size:18px;font-weight:700;color:#06223f;
+  background:linear-gradient(180deg,#f0c060,#d9a437);border:none;cursor:pointer;
+  padding:14px 40px;border-radius:14px;letter-spacing:1px;box-shadow:0 8px 24px rgba(240,192,96,.3);
+  transition:.15s;position:sticky;bottom:0;margin-top:8px;}
+button#startBtn:hover,button#restartBtn:hover{transform:translateY(-2px);box-shadow:0 12px 30px rgba(240,192,96,.45);}
+
+/* ---------- 阵营势力状态条（v20）---------- */
+.crew-status{position:absolute;left:14px;top:70px;display:flex;flex-wrap:wrap;gap:6px;
+  max-width:340px;padding:8px 10px;background:rgba(8,18,36,.6);
+  border-radius:10px;border:1px solid rgba(240,192,96,.2);font-size:12px;}
+.crew-status .cs-item{display:flex;align-items:center;gap:4px;padding:3px 7px;
+  border-radius:8px;background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);white-space:nowrap;}
+.crew-status .cs-item.active{border-color:rgba(240,192,96,.55);background:rgba(240,192,96,.12);}
+.crew-status .cs-icon{font-size:14px;}
+.crew-status .cs-dot{width:6px;height:6px;border-radius:50%;display:inline-block;}
+.crew-status .cs-num{color:var(--gold);font-weight:700;}
+.crew-status .cs-num-enemy{color:#ff7a5c;font-weight:700;}
+
+#endTitle.win{color:var(--ok);}
+#endTitle.lose{color:var(--danger);}
