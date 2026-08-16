@@ -332,53 +332,48 @@ let seaKingCooldown = 0;
 let seaKing = null;
 
 // ---------- v25 海怪阵营系统 ----------
-const SEA_MONSTER_FACTIONS = [
-  { name:'深渊人鱼族', color:'#9b7dff', icon:'🧜', leader:'深海人鱼王', minions:['merman','zombie'], count:6 },
-  { name:'血珊瑚蛇族', color:'#ff5566', icon:'🐍', leader:'血珊瑚海王', minions:['sea_serpent','kraken'], count:6 },
-  { name:'黄金蟹族',  color:'#ffcc00', icon:'🦀', leader:'黄金蟹王',  minions:['sea_giant','sea_giant'], count:5 },
-  { name:'暗影章鱼族', color:'#44dddd', icon:'🐙', leader:'暗影章鱼王', minions:['kraken','zombie'], count:6 },
-  { name:'深渊鲨蛇族', color:'#ff7733', icon:'🦈', leader:'深渊鲨王',  minions:['sea_serpent','sea_giant'], count:6 },
-];
-let seaMonsterLairs = []; // 海怪巢穴（每个巢穴=1海王+一群小弟）
+// 唯一海怪BOSS（单一巢穴，boss被杀后所有海怪消失）
+const SEA_MONSTER_BOSS = { name:'海怪之王', title:'深海之主', color:'#9b5dff', icon:'🐙', hp:2500, atk:45 };
+let seaMonsterLair = null; // 唯一海怪巢穴 { x, y, r, alive, cd, bossAlive }
+let seaMonsterLairCooldown = 999; // 击杀>=50后变为45s
 
-// 生成一个海怪巢穴（含海王+小弟）
+// 生成唯一海怪巢穴（1个海怪之王+6只小弟）
 function spawnSeaMonsterLair(){
-  if(seaMonsterLairs.length >= 4) return;
-  const faction = choice(SEA_MONSTER_FACTIONS);
+  if(seaMonsterLair && seaMonsterLair.alive) return;
   const pp = playerXY();
   const a = rand(0, Math.PI*2);
-  const r = rand(1800, 3200);
+  const r = rand(2000, 3200);
   const px = pp.x + Math.cos(a)*r, py = pp.y + Math.sin(a)*r;
-  if(isLand(px, py)) { seaMonsterLairCooldown = 10; return; }
+  if(isLand(px, py)) { seaMonsterLairCooldown = 15; return; }
 
-  const lair = { x: px, y: py, r: 280, faction, alive: true, cd: 12, kingAlive: true, name: faction.name };
-  seaMonsterLairs.push(lair);
+  const lair = { x: px, y: py, r: 320, alive: true, cd: 15, bossAlive: true };
+  seaMonsterLair = lair;
 
   // 生成小弟
-  for(let i=0; i<faction.count; i++){
-    const mt = choice(faction.minions);
+  const minionTypes = ['merman','sea_serpent','kraken','zombie','sea_giant'];
+  for(let i=0; i<6; i++){
+    const mt = choice(minionTypes);
     const m = SEA_MONSTER_TYPES[mt];
     seaMonsters.push({
-      type: mt, x: px+rand(-160,160), y: py+rand(-160,160), vx:0, vy:0,
+      type: mt, x: px+rand(-180,180), y: py+rand(-180,180), vx:0, vy:0,
       hp: m.hp, maxhp: m.hp, atk: m.atk, speed: m.sp, range: m.range,
-      cd: m.cd, size: m.size, color: faction.color, flash:0, angle:0, dead:false, phase:0,
-      lair: lair, factionName: faction.name
+      cd: m.cd, size: m.size, color: '#7a9ed8', flash:0, angle:0, dead:false, phase:0,
+      lair: lair, isLeader: false, leaderName:'', factionName:''
     });
   }
-  // 生成海王首领
+  // 生成海怪之王
   const mk = SEA_MONSTER_TYPES.sea_king;
   const king = {
     type: 'sea_king', x: px, y: py, vx:0, vy:0,
-    hp: mk.hp*1.5, maxhp: mk.hp*1.5, atk: mk.atk+5, speed: mk.sp,
-    range: mk.range, cd: mk.cd, size: mk.size*1.2, color: faction.color,
+    hp: mk.hp*2, maxhp: mk.hp*2, atk: mk.atk+10, speed: mk.sp,
+    range: mk.range, cd: mk.cd, size: mk.size*1.4, color: SEA_MONSTER_BOSS.color,
     flash:0, angle:0, dead:false, phase:0, lair: lair, isLeader: true,
-    leaderName: faction.leader, factionName: faction.name
+    leaderName: SEA_MONSTER_BOSS.title, factionName: SEA_MONSTER_BOSS.name
   };
   seaMonsters.push(king);
-  floatText(pp.x, pp.y-55, '🌊 '+faction.icon+' '+faction.name+' 海怪巢穴出现！', faction.color);
-  for(let i=0;i<25;i++) particles.push(mkParticle(px+rand(-80,80), py+rand(-80,80), faction.color));
+  floatText(px, py-60, '🌊👑 '+SEA_MONSTER_BOSS.title+' 降临！'+SEA_MONSTER_BOSS.name+' 巢穴已建立！', SEA_MONSTER_BOSS.color);
+  for(let i=0;i<30;i++) particles.push(mkParticle(px+rand(-100,100), py+rand(-100,100), SEA_MONSTER_BOSS.color));
 }
-let seaMonsterLairCooldown = 999; // 初始极大值，需击杀>=50后才刷新海怪巢穴
 
 // 散落武器池
 const GROUND_WEAPON_POOL = ['knife','spear','axe','cutlass','bow','pistol','flask','handgun','gatling','rifle','rpg'];
@@ -439,6 +434,9 @@ function resetGame(){
   for(let i=0;i<20;i++) spawnLandAnimal(captain.x, captain.y);
   spawnDragonNests();
   dragonKing = null;
+  dragonKingCooldown = 30;
+  pirateBoss = null;
+  pirateBossGuardCooldown = 0;
   for(let i=0;i<8;i++) spawnTreasureChest();
   spawnEnemyIslands();
   captain.equip = [];  // v13 装备栏
@@ -841,6 +839,7 @@ const DRAGON_NEST_COUNT = 4;       // 初始生成龙窝数量
 const DRAGON_NEST_GUARDS = 3;      // 每个龙窝的守卫龙数量
 // 东海龙王：终极BOSS，在击败所有龙窝后出现
 let dragonKing = null;  // { x, y, hp, maxhp, atk, speed, range, cd, phase, size, dead }
+let dragonKingCooldown = 30; // 初始30s后触发龙王出现
 
 function spawnLandAnimal(px, py, span){
   const types = ['wolf','wolf','bear','cow','cow','cow','deer','deer','sheep','sheep','sheep'];
@@ -1060,6 +1059,17 @@ function drawLandAnimals(){
       ctx.fillStyle='rgba(150,200,100,0.5)';
       ctx.beginPath(); ctx.ellipse(hx-face*S*0.05, hy-S*0.24, S*0.015, S*0.04, -0.3, 0, Math.PI*2); ctx.fill();
       ctx.beginPath(); ctx.ellipse(hx+face*S*0.12, hy-S*0.24, S*0.015, S*0.04, 0.3, 0, Math.PI*2); ctx.fill();
+      // 龙须（左右各一，细长飘动）
+      ctx.strokeStyle = isKing ? '#80d0ff' : '#5abf6a'; ctx.lineWidth=2; ctx.lineCap='round';
+      const whiskerPhase = Math.sin(animT*4+a.x*0.01);
+      ctx.beginPath();
+      ctx.moveTo(hx+face*S*0.15, hy+S*0.06);
+      ctx.quadraticCurveTo(hx+face*S*0.35, hy+S*0.15+whiskerPhase*S*0.08, hx+face*S*0.5, hy+S*0.05+whiskerPhase*S*0.1);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(hx+face*S*0.15, hy+S*0.1);
+      ctx.quadraticCurveTo(hx+face*S*0.4, hy+S*0.25+whiskerPhase*S*0.08, hx+face*S*0.55, hy+S*0.18+whiskerPhase*S*0.12);
+      ctx.stroke();
       // 眼睛（友好圆眼，蓝色虹膜）
       ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(hx+face*S*0.12, hy-S*0.05, S*0.07, 0, Math.PI*2); ctx.fill();
       ctx.fillStyle='#4a9fff'; ctx.beginPath(); ctx.arc(hx+face*S*0.13, hy-S*0.05, S*0.045, 0, Math.PI*2); ctx.fill();
@@ -1184,14 +1194,21 @@ function spawnDragonKing(){
 }
 function killDragonKing(){
   dragonKing.dead = true; kills++;
+  // 龙王被杀 → 所有龙消失
+  for(let i=0;i<landAnimals.length;i++){
+    if(landAnimals[i].type==='dragon'||landAnimals[i].type==='dragonKing') landAnimals[i].dead = true;
+  }
+  landAnimals.length = 0;
+  // 清除所有龙窝
+  for(const nest of dragonNests) nest.alive = false;
   inventory.gold += 5000;
   inventory.iron += 20;
   inventory.timber += 10;
-  floatText(dragonKing.x, dragonKing.y-40, '🐲 东海龙王已被讨伐! 🪙+5000 ⛏️+20 🏗️+10', '#4aa8ff');
-  floatText(dragonKing.x, dragonKing.y-60, '🏆 海域传说·屠龙者!', '#80d0ff');
+  floatText(dragonKing.x, dragonKing.y-40, '🐲 东海龙王已被讨伐! 龙族全灭!', '#4aa8ff');
+  floatText(dragonKing.x, dragonKing.y-56, '🏆 海域传说·屠龙者! 🪙+5000 ⛏️+20 🏗️+10', '#80d0ff');
   for(let i=0;i<60;i++) particles.push(mkParticle(dragonKing.x, dragonKing.y, choice(['#1a8b3a','#4aa8ff','#80d0ff','#aae0ff','#b060ff'])));
   tryEquipFromDrop('dragon_armor', dragonKing.x, dragonKing.y);
-  if(!arsenal.has('scythe')){ arsenal.add('scythe'); weaponLevel['scythe']=1; floatText(dragonKing.x, dragonKing.y-80, '🔥 获得传说武器: 死神镰刀!','#ff5555'); }
+  if(!arsenal.has('scythe')){ arsenal.add('scythe'); weaponLevel['scythe']=1; floatText(dragonKing.x, dragonKing.y-72, '🔥 获得传说武器: 死神镰刀!','#ff5555'); }
   gainCaptainXp(CAPTAIN_XP_KILL_SHIP*5);
   updateInventoryHUD(); checkMilestone(); checkVictory();
 }
@@ -1210,10 +1227,11 @@ function updateDragonNests(dt){
       floatText(nest.x, nest.y-nest.r-16, '💧 龙窝已破!', '#4aa8ff');
     }
   }
-  // 所有龙窝被破后，召唤东海龙王
-  const allNestsDown = dragonNests.length>0 && dragonNests.every(n=>!n.alive);
-  if(allNestsDown && (!dragonKing || dragonKing.dead)){
-    if(Math.random()<0.003) spawnDragonKing();
+  // 所有龙窝被破或击杀>=20后，召唤东海龙王
+  const anyNestDown = dragonNests.length>0 && dragonNests.some(n=>!n.alive);
+  if((anyNestDown || kills >= 20) && (!dragonKing || dragonKing.dead)){
+    dragonKingCooldown -= dt;
+    if(dragonKingCooldown <= 0){ dragonKingCooldown = 999; spawnDragonKing(); }
   }
   // 东海龙王AI
   if(dragonKing && !dragonKing.dead){
@@ -1735,6 +1753,16 @@ function cannonBlast(x,y,dmg,aoe){
     const f=Math.max(0.35, 1-d/aoe);
     damageEnemy(t, dmg*f, t.combatXp===undefined);
   }
+  // v27 炮弹命中海盗BOSS
+  if(pirateBoss && !pirateBoss.dead){
+    const d=dist(x,y,pirateBoss.x,pirateBoss.y);
+    if(d<aoe+pirateBoss.size){
+      const f=Math.max(0.35, 1-d/(aoe+pirateBoss.size));
+      pirateBoss.hp -= dmg*f; pirateBoss.flash=0.3;
+      for(let i=0;i<8;i++) particles.push(mkParticle(pirateBoss.x,pirateBoss.y,'#ff5533'));
+      if(pirateBoss.hp<=0) killPirateBoss();
+    }
+  }
   for(const n of nodes){ if(n.amount>0 && n.type==='barrel' && dist(x,y,n.x,n.y)<aoe) hitNode(n,null); }
   for(const b of birds){ if(!b.dead && dist(x,y,b.x,b.y)<aoe*0.7) catchBird(b,'shot'); }
   // 大炮同样可捕获落点范围内的鱼/龟/鲨/鲸
@@ -1818,6 +1846,18 @@ function doAttack(){
           a.flash=0.15;
           if(a.hp<=0 && !a.dead) killLandAnimal(a);
           for(let i=0;i<3;i++) particles.push(mkParticle(a.x,a.y, a.type==='dragon'?'#ff5b3a':'#a08050'));
+        }
+      }
+    }
+    // v27 攻击海盗BOSS
+    if(pirateBoss && !pirateBoss.dead && dist(ox,oy,pirateBoss.x,pirateBoss.y) <= w.range + pirateBoss.size){
+      const ta=Math.atan2(pirateBoss.y-oy,pirateBoss.x-ox);
+      let da=Math.abs(((ta-ang+Math.PI)%(Math.PI*2))-Math.PI);
+      if(da<1.2){
+        pirateBoss.hp -= dmg; pirateBoss.flash=0.2;
+        for(let i=0;i<6;i++) particles.push(mkParticle(pirateBoss.x,pirateBoss.y,'#ff5533'));
+        if(pirateBoss.hp<=0){
+          killPirateBoss();
         }
       }
     }
@@ -2203,6 +2243,178 @@ function updateCreatures(dt){
   var _o=0; for(let _i=0;_i<creatures.length;_i++) if(!creatures[_i].dead) creatures[_o++]=creatures[_i]; creatures.length=_o;
 }
 
+// ========== v27 海盗BOSS系统 ==========
+// 海盗BOSS：定点在远处岛屿，血量极高，击败=大获全胜
+const PIRATE_BOSS_X = 8000;
+const PIRATE_BOSS_Y = -6000;
+const PIRATE_BOSS_HP = 5000;
+const PIRATE_BOSS_ATK = 80;
+let pirateBoss = null; // null or { x, y, hp, maxhp, atk, speed, range, cd, size, phase, dead, islandKey }
+const PIRATE_BOSS_ISLAND = { x: PIRATE_BOSS_X, y: PIRATE_BOSS_Y, r: 280 };
+let pirateBossGuardCooldown = 0;
+
+function spawnPirateBoss(){
+  if(pirateBoss && !pirateBoss.dead) return;
+  pirateBoss = {
+    type: 'pirateBoss', x: PIRATE_BOSS_X, y: PIRATE_BOSS_Y,
+    hp: PIRATE_BOSS_HP, maxhp: PIRATE_BOSS_HP, atk: PIRATE_BOSS_ATK,
+    speed: 1.5, range: 90, cd: 0.8, size: 36, phase: 0, dead: false,
+    flash: 0, angle: 0, _rangedCd: 0, islandKey: 'pirateBoss'
+  };
+  floatText(PIRATE_BOSS_X, PIRATE_BOSS_Y-60, '⚠️ 海盗BOSS据点！前往 '+PIRATE_BOSS_X+' '+PIRATE_BOSS_Y, '#ff5533');
+  floatText(PIRATE_BOSS_X, PIRATE_BOSS_Y-76, '👑 击败BOSS = 大获全胜！', '#ffd27a');
+}
+function updatePirateBoss(dt){
+  if(!pirateBoss || pirateBoss.dead) return;
+  pirateBoss.phase += dt;
+  pirateBoss._rangedCd -= dt;
+  if(pirateBoss.flash>0) pirateBoss.flash -= dt;
+  if(pirateBoss.cd>0) pirateBoss.cd -= dt;
+  const tpx = captain.onShip? ship.x : captain.x, tpy = captain.onShip? ship.y : captain.y;
+  const d = dist(pirateBoss.x, pirateBoss.y, tpx, tpy);
+  // 海盗BOSS在自己的岛屿上活动
+  const maxR = PIRATE_BOSS_ISLAND.r*0.8;
+  const dx2 = pirateBoss.x - PIRATE_BOSS_ISLAND.x, dy2 = pirateBoss.y - PIRATE_BOSS_ISLAND.y;
+  const dd2 = Math.sqrt(dx2*dx2+dy2*dy2);
+  if(dd2 > maxR){
+    const ta = Math.atan2(-dy2, -dx2);
+    pirateBoss.x = PIRATE_BOSS_ISLAND.x + Math.cos(ta)*maxR*0.9;
+    pirateBoss.y = PIRATE_BOSS_ISLAND.y + Math.sin(ta)*maxR*0.9;
+  }
+  // 追击玩家
+  if(d < 500){
+    const ta = Math.atan2(tpy-pirateBoss.y, tpx-pirateBoss.x);
+    pirateBoss.vx = (pirateBoss.vx||0)*0.9 + Math.cos(ta)*pirateBoss.speed*0.1;
+    pirateBoss.vy = (pirateBoss.vy||0)*0.9 + Math.sin(ta)*pirateBoss.speed*0.1;
+    pirateBoss.x += (pirateBoss.vx||0)*dt*3;
+    pirateBoss.y += (pirateBoss.vy||0)*dt*3;
+    pirateBoss.angle = ta;
+    // 近战攻击
+    if(d < pirateBoss.range && pirateBoss.cd<=0 && !captain.onShip){
+      pirateBoss.cd = 0.8;
+      if(captain.hp>0){
+        captain.hp -= pirateBoss.atk;
+        pirateBoss.flash = 0.2;
+        floatText(captain.x, captain.y-30, '👑 海盗BOSS重击! -'+pirateBoss.atk, '#ff5533');
+        for(let i=0;i<10;i++) particles.push(mkParticle(captain.x, captain.y, '#ff5533'));
+        if(captain.hp<=0) endGame(false);
+      }
+    }
+    // 远程炮击
+    if(pirateBoss._rangedCd<=0 && d < 200){
+      pirateBoss._rangedCd = 1.5;
+      const ra = Math.atan2(tpy-pirateBoss.y, tpx-pirateBoss.x);
+      projectiles.push({ x:pirateBoss.x+Math.cos(ra)*20, y:pirateBoss.y+Math.sin(ra)*20,
+        vx:Math.cos(ra)*400, vy:Math.sin(ra)*400,
+        dmg:45, from:'enemy', ship:false, life:1.2, color:'#ff5533', aoe:0 });
+    }
+  } else {
+    // 巡逻
+    pirateBoss.patrolCd = (pirateBoss.patrolCd||0) - dt;
+    if(pirateBoss.patrolCd<=0){
+      const na = pirateBoss.angle+rand(-1,1); pirateBoss.angle=na;
+      pirateBoss.vx = Math.cos(na)*pirateBoss.speed*0.3;
+      pirateBoss.vy = Math.sin(na)*pirateBoss.speed*0.3;
+      pirateBoss.patrolCd = rand(2,4);
+    }
+    pirateBoss.x += (pirateBoss.vx||0)*dt*2;
+    pirateBoss.y += (pirateBoss.vy||0)*dt*2;
+  }
+  // 守卫补充
+  pirateBossGuardCooldown -= dt;
+  if(pirateBossGuardCooldown<=0){ pirateBossGuardCooldown = 10;
+    const a = rand(0, Math.PI*2), rr = rand(50, PIRATE_BOSS_ISLAND.r*0.6);
+    const gx = PIRATE_BOSS_ISLAND.x+Math.cos(a)*rr, gy = PIRATE_BOSS_ISLAND.y+Math.sin(a)*rr;
+    if(isLand(gx, gy)){
+      const lvl = randi(3,5);
+      pirates.push(makePirate(gx, gy, lvl, 0));
+    }
+  }
+}
+function killPirateBoss(){
+  pirateBoss.dead = true; kills++;
+  // 大获全胜！
+  victoryWon = true; victoryType = 'pirateBoss';
+  floatText(pirateBoss.x, pirateBoss.y-80, '👑 海盗BOSS已被击败!!!', '#ffd27a');
+  floatText(pirateBoss.x, pirateBoss.y-96, '🏆 大获全胜! 海盗王国覆灭!', '#ffd27a');
+  for(let i=0;i<80;i++) particles.push(mkParticle(pirateBoss.x, pirateBoss.y, choice(['#ffd27a','#ff5533','#ffaa00','#fff5cc'])));
+  inventory.gold += 10000; inventory.iron += 50; inventory.parts += 30; inventory.steel += 30;
+  floatText(pirateBoss.x, pirateBoss.y-112, '🪙+10000 ⛏️+50 🔧+30 ⚙️+30','#9be8b4');
+  // 掉落传说装备
+  for(let i=0;i<5;i++) tryDropEquipment(pirateBoss.x+rand(-30,30), pirateBoss.y+rand(-30,30), 3);
+  updateInventoryHUD();
+  endGame(true);
+}
+function drawPirateBoss(){
+  if(!pirateBoss || pirateBoss.dead) return;
+  const sx = pirateBoss.x-cam.x, sy = pirateBoss.y-cam.y;
+  const vw=canvas.width/DPR, vh=canvas.height/DPR;
+  if(sx<-60||sx>vw+60||sy<-60||sy>vh+60) return;
+  const pulse = Math.sin(pirateBoss.phase*3)*0.1+0.9;
+  ctx.save();
+  // 领地范围圈
+  ctx.strokeStyle='rgba(255,85,51,0.35)'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(PIRATE_BOSS_ISLAND.x, PIRATE_BOSS_ISLAND.y, PIRATE_BOSS_ISLAND.r*pulse, 0, Math.PI*2); ctx.stroke();
+  ctx.strokeStyle='rgba(255,85,51,0.2)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(PIRATE_BOSS_ISLAND.x, PIRATE_BOSS_ISLAND.y, PIRATE_BOSS_ISLAND.r*0.6, 0, Math.PI*2); ctx.stroke();
+  // BOSS光环
+  ctx.fillStyle='rgba(255,85,51,0.1)';
+  ctx.beginPath(); ctx.arc(pirateBoss.x, pirateBoss.y, 45*pulse, 0, Math.PI*2); ctx.fill();
+  ctx.restore();
+  // BOSS身体（大个子海盗）
+  ctx.save();
+  ctx.translate(pirateBoss.x, pirateBoss.y);
+  // 阴影
+  ctx.globalAlpha=0.25; ctx.fillStyle='#000';
+  ctx.beginPath(); ctx.ellipse(0, pirateBoss.size*0.7, pirateBoss.size*0.8, pirateBoss.size*0.25, 0,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1;
+  // 身体
+  ctx.fillStyle = pirateBoss.flash>0 ? '#fff' : '#5a2a0a';
+  ctx.beginPath(); ctx.ellipse(0, 0, pirateBoss.size*0.6, pirateBoss.size*0.85, 0, 0, Math.PI*2); ctx.fill();
+  // 披风
+  ctx.fillStyle = '#8b1a1a';
+  ctx.beginPath(); ctx.moveTo(-pirateBoss.size*0.6, pirateBoss.size*0.3);
+  ctx.quadraticCurveTo(-pirateBoss.size*0.9, pirateBoss.size*0.8, -pirateBoss.size*0.4, pirateBoss.size); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(pirateBoss.size*0.6, pirateBoss.size*0.3);
+  ctx.quadraticCurveTo(pirateBoss.size*0.9, pirateBoss.size*0.8, pirateBoss.size*0.4, pirateBoss.size); ctx.closePath(); ctx.fill();
+  // 头
+  ctx.fillStyle = '#e6c991';
+  ctx.beginPath(); ctx.arc(0, -pirateBoss.size*0.75, pirateBoss.size*0.35, 0, Math.PI*2); ctx.fill();
+  // 海盗帽
+  ctx.fillStyle = '#222';
+  ctx.beginPath(); ctx.ellipse(0, -pirateBoss.size*0.95, pirateBoss.size*0.4, pirateBoss.size*0.15, 0, Math.PI, Math.PI*2); ctx.fill();
+  // 骷髅标志
+  ctx.fillStyle = '#fff'; ctx.font=(pirateBoss.size*0.22)+'px Segoe UI Emoji'; ctx.textAlign='center';
+  ctx.fillText('☠️', 0, -pirateBoss.size*0.88);
+  // 眼
+  ctx.fillStyle='#000'; ctx.beginPath();
+  ctx.arc(-pirateBoss.size*0.1, -pirateBoss.size*0.78, 0.04*pirateBoss.size, 0, Math.PI*2);
+  ctx.arc(pirateBoss.size*0.1, -pirateBoss.size*0.78, 0.04*pirateBoss.size, 0, Math.PI*2); ctx.fill();
+  // 嘴
+  ctx.strokeStyle='#000'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0, -pirateBoss.size*0.65, 0.08*pirateBoss.size, 0, Math.PI); ctx.stroke();
+  // 刀
+  ctx.fillStyle='#ccc';
+  ctx.save(); ctx.translate(pirateBoss.size*0.7, -pirateBoss.size*0.1); ctx.rotate(-0.3);
+  ctx.fillRect(0, -2, pirateBoss.size*0.5, 4);
+  ctx.fillStyle='#8a4a1e'; ctx.fillRect(-pirateBoss.size*0.1, -4, pirateBoss.size*0.15, 8);
+  ctx.restore();
+  ctx.textAlign='left';
+  // 血条
+  const barW = pirateBoss.size*2.2;
+  drawBar(-barW/2, -pirateBoss.size-20, barW, 5, pirateBoss.hp/pirateBoss.maxhp, '#ff5533');
+  // BOSS标识
+  ctx.font='bold 16px Segoe UI'; ctx.textAlign='center';
+  ctx.fillStyle='#ffd27a';
+  ctx.fillText('👑 海盗BOSS', 0, -pirateBoss.size-28);
+  ctx.font='bold 12px Segoe UI'; ctx.fillStyle='#ff5533';
+  ctx.fillText('HP:'+Math.ceil(pirateBoss.hp)+'/'+pirateBoss.maxhp, 0, -pirateBoss.size-12);
+  ctx.font='10px Segoe UI'; ctx.fillStyle='#ffd27a';
+  ctx.fillText('⚠️ 击败=大获全胜!', 0, -pirateBoss.size-40);
+  ctx.textAlign='left';
+  ctx.restore();
+}
+
 // ========== v22 海怪系统 ==========
 function spawnSeaMonster(){
   const types = Object.keys(SEA_MONSTER_TYPES);
@@ -2337,50 +2549,68 @@ function updateSeaMonsters(dt){
   var _o=0; for(let _i=0;_i<seaMonsters.length;_i++) if(!seaMonsters[_i].dead) seaMonsters[_o++]=seaMonsters[_i]; seaMonsters.length=_o;
   // 独立海怪（非阵营）随机生成
   if(seaMonsters.length < 4 && Math.random() < 0.003){ const pp=playerXY(); spawnSeaMonster(); }
-  // 海怪巢穴刷新（仅在玩家击杀>=50后才出现海怪boss阵营）
+  // 海怪巢穴刷新（击杀>=50后45s刷新唯一海怪之王巢穴）
   seaMonsterLairCooldown -= dt;
-  if(kills >= 50 && seaMonsterLairCooldown <= 0){ seaMonsterLairCooldown = rand(60, 90); spawnSeaMonsterLair(); }
-  // 巢穴海王复活
-  for(const lair of seaMonsterLairs){
-    const hasKing = seaMonsters.some(sm => sm.lair === lair && sm.isLeader && !sm.dead);
-    if(!hasKing && lair.alive){ lair.cd -= dt; if(lair.cd <= 0){ lair.cd = rand(20, 30); lair.kingAlive = false; spawnLairKing(lair); } }
-    // 巢穴小弟补充
-    const hasMinions = seaMonsters.some(sm => sm.lair === lair && !sm.isLeader && !sm.dead);
-    if(!hasMinions && lair.alive){ lair.cd -= dt; if(lair.cd <= 0){ lair.cd = rand(15, 20); respawnLairMinions(lair); } }
+  if(kills >= 50 && !seaMonsterLair && seaMonsterLairCooldown > 44){ seaMonsterLairCooldown = 45; }
+  if(kills >= 50 && !seaMonsterLair && seaMonsterLairCooldown <= 0){ seaMonsterLairCooldown = 999; spawnSeaMonsterLair(); }
+  // 海怪之王复活（巢穴内boss被杀后60-90s复活）
+  if(seaMonsterLair && seaMonsterLair.alive){
+    const hasKing = seaMonsters.some(sm => sm.lair === seaMonsterLair && sm.isLeader && !sm.dead);
+    if(!hasKing){
+      seaMonsterLair.cd -= dt;
+      if(seaMonsterLair.cd <= 0){
+        seaMonsterLair.cd = rand(60, 90);
+        const mk = SEA_MONSTER_TYPES.sea_king;
+        seaMonsters.push({
+          type: 'sea_king', x: seaMonsterLair.x+rand(-30,30), y: seaMonsterLair.y+rand(-30,30), vx:0, vy:0,
+          hp: mk.hp*2, maxhp: mk.hp*2, atk: mk.atk+10, speed: mk.sp,
+          range: mk.range, cd: mk.cd, size: mk.size*1.4, color: SEA_MONSTER_BOSS.color,
+          flash:0, angle:0, dead:false, phase:0, lair: seaMonsterLair, isLeader: true,
+          leaderName: SEA_MONSTER_BOSS.title, factionName: SEA_MONSTER_BOSS.name
+        });
+        floatText(seaMonsterLair.x, seaMonsterLair.y-seaMonsterLair.r-15, '👑 '+SEA_MONSTER_BOSS.title+' 复活！', SEA_MONSTER_BOSS.color);
+      }
+    }
   }
   // 远处巢穴回收
-  let _lo=0; for(let _li=0;_li<seaMonsterLairs.length;_li++){ if(dist(seaMonsterLairs[_li].x,seaMonsterLairs[_li].y,pp.x,pp.y)<4000) seaMonsterLairs[_lo++]=seaMonsterLairs[_li]; } seaMonsterLairs.length=_lo;
+  if(seaMonsterLair && dist(seaMonsterLair.x, seaMonsterLair.y, pp.x, pp.y) > 5000){ seaMonsterLair = null; }
 }
 
-// 海怪巢穴海王复活
-function spawnLairKing(lair){
-  const m = SEA_MONSTER_TYPES.sea_king;
-  seaMonsters.push({
-    type: 'sea_king', x: lair.x+rand(-40,40), y: lair.y+rand(-40,40), vx:0, vy:0,
-    hp: m.hp*1.5, maxhp: m.hp*1.5, atk: m.atk+5, speed: m.sp,
-    range: m.range, cd: m.cd, size: m.size*1.2, color: lair.faction.color,
-    flash:0, angle:0, dead:false, phase:0, lair: lair, isLeader: true,
-    leaderName: lair.faction.leader, factionName: lair.faction.name
-  });
-  lair.kingAlive = true;
-  floatText(lair.x, lair.y-lair.r-15, '👑 '+lair.faction.leader+' 复活！', lair.faction.color);
-}
-// 巢穴小弟补充
-function respawnLairMinions(lair){
-  const f = lair.faction;
-  for(let i=0; i<f.count; i++){
-    const mt = choice(f.minions);
-    const m = SEA_MONSTER_TYPES[mt];
-    seaMonsters.push({
-      type: mt, x: lair.x+rand(-160,160), y: lair.y+rand(-160,160), vx:0, vy:0,
-      hp: m.hp, maxhp: m.hp, atk: m.atk, speed: m.sp, range: m.range,
-      cd: m.cd, size: m.size, color: f.color, flash:0, angle:0, dead:false, phase:0,
-      lair: lair, factionName: f.name
-    });
+// 绘制海怪巢穴标记（大号发光圈，容易发现）
+function drawSeaMonsterLair(){
+  if(!seaMonsterLair || !seaMonsterLair.alive) return;
+  const lair = seaMonsterLair;
+  const sx = lair.x-cam.x, sy = lair.y-cam.y;
+  const vw=canvas.width/DPR, vh=canvas.height/DPR;
+  const r = lair.r;
+  if(sx<-r-60||sx>vw+r+60||sy<-r-60||sy>vh+r+60) return;
+  const pulse = Math.sin(animT*3)*0.15+0.85;
+  // 大号领地圈（发光）
+  ctx.fillStyle='rgba(155,93,255,0.08)';
+  ctx.beginPath(); ctx.arc(lair.x, lair.y, r*pulse*1.2, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(155,93,255,0.5)'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(lair.x, lair.y, r*pulse, 0, Math.PI*2); ctx.stroke();
+  // 内圈
+  ctx.strokeStyle='rgba(155,93,255,0.3)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(lair.x, lair.y, r*0.6, 0, Math.PI*2); ctx.stroke();
+  // 中心漩涡
+  ctx.strokeStyle='rgba(155,93,255,0.6)'; ctx.lineWidth=2;
+  for(let i=0;i<3;i++){
+    const ar = r*0.3+i*20;
+    ctx.beginPath(); ctx.arc(lair.x, lair.y, ar, animT*2+i, animT*2+i+Math.PI*0.8); ctx.stroke();
   }
+  // 文字标签
+  ctx.font='bold 16px Segoe UI'; ctx.textAlign='center'; ctx.fillStyle='#9b5dff';
+  ctx.fillText('🌊👑 '+SEA_MONSTER_BOSS.name+' 巢穴', lair.x, lair.y-r-22);
+  ctx.font='11px Segoe UI'; ctx.fillStyle='#c9a8ff';
+  ctx.fillText('⚠️ 海怪之王据点 不可进入', lair.x, lair.y-r-8);
+  ctx.textAlign='left';
 }
+
 // 绘制海怪（含海王）
 function drawSeaMonsters(){
+  // 先绘制巢穴标记
+  drawSeaMonsterLair();
   for(const sm of seaMonsters){
     if(sm.dead) continue;
     const sx=sm.x-cam.x, sy=sm.y-cam.y;
@@ -2819,6 +3049,11 @@ function update(dt){
         for(const s of pirateShips){ const d=dist(pr.x,pr.y,s.x,s.y); if(!s.dead && d<((s.radius||18))+8 && d<hd){ hd=d; hit=s; } }
         for(const a of landAnimals){ if(a.dead) continue; const d=dist(pr.x,pr.y,a.x,a.y); if(d<((a.size||18))+8 && d<hd){ hd=d; hit=a; } }
         for(const sm of seaMonsters){ if(sm.dead) continue; const d=dist(pr.x,pr.y,sm.x,sm.y); if(d<((sm.size||18))+8 && d<hd){ hd=d; hit=sm; } }
+        // v27 海盗BOSS弹道命中
+        if(!hit && pirateBoss && !pirateBoss.dead){
+          const d=dist(pr.x,pr.y,pirateBoss.x,pirateBoss.y);
+          if(d < pirateBoss.size+10 && d<hd){ hd=d; hit=pirateBoss; }
+        }
         if(hit){
           if(hit.combatXp===undefined){ damageEnemy(hit, pr.dmg, true); pr.life=0; }
           else if(hit.atk!==undefined && hit.type in ANIMAL_TYPES){ hit.hp-=pr.dmg; hit.flash=0.15;
@@ -2829,6 +3064,12 @@ function update(dt){
             if(hit.hp<=0 && !hit.dead) killSeaMonster(hit);
             pr.life=0;
           } else { damageEnemy(hit, pr.dmg, false); pr.life=0; }
+          // v27 海盗BOSS弹道伤害
+          if(hit === pirateBoss){
+            pirateBoss.hp -= pr.dmg; pirateBoss.flash=0.2; pr.life=0;
+            for(let i=0;i<4;i++) particles.push(mkParticle(pirateBoss.x,pirateBoss.y,'#ff5533'));
+            if(pirateBoss.hp<=0) killPirateBoss();
+          }
         } else {
           for(const b of birds){ if(!b.dead && dist(pr.x,pr.y,b.x,b.y-b.alt)<16){ catchBird(b,'shot'); pr.life=0; break; } }
           if(pr.life>0){ for(const c of creatures){ if(['fish','turtle','shark','whale'].includes(c.type) && dist(pr.x,pr.y,c.x,c.y)<14){ catchFish(c); pr.life=0; break; } } }
@@ -2852,6 +3093,7 @@ function update(dt){
   updateBirds(dt);
   updateLandAnimals(dt);
   updateDragonNests(dt);
+  updatePirateBoss(dt);
   updateSeaMonsters(dt);
   updateGroundWeapons(dt);
   updatePirateBoarding(dt);
@@ -2973,6 +3215,7 @@ function render(){
   drawLandAnimals();
   drawDragonNests();
   drawSeaMonsters();
+  drawPirateBoss();
   drawGroundWeapons();
   drawTreasureChests();
   if(captain.onShip) drawCannonAim();
