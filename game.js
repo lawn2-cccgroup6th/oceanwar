@@ -331,6 +331,55 @@ const SEA_MONSTER_TYPES = {
 let seaKingCooldown = 0;
 let seaKing = null;
 
+// ---------- v25 海怪阵营系统 ----------
+const SEA_MONSTER_FACTIONS = [
+  { name:'深渊人鱼族', color:'#9b7dff', icon:'🧜', leader:'深海人鱼王', minions:['merman','zombie'], count:6 },
+  { name:'血珊瑚蛇族', color:'#ff5566', icon:'🐍', leader:'血珊瑚海王', minions:['sea_serpent','kraken'], count:6 },
+  { name:'黄金蟹族',  color:'#ffcc00', icon:'🦀', leader:'黄金蟹王',  minions:['sea_giant','sea_giant'], count:5 },
+  { name:'暗影章鱼族', color:'#44dddd', icon:'🐙', leader:'暗影章鱼王', minions:['kraken','zombie'], count:6 },
+  { name:'深渊鲨蛇族', color:'#ff7733', icon:'🦈', leader:'深渊鲨王',  minions:['sea_serpent','sea_giant'], count:6 },
+];
+let seaMonsterLairs = []; // 海怪巢穴（每个巢穴=1海王+一群小弟）
+
+// 生成一个海怪巢穴（含海王+小弟）
+function spawnSeaMonsterLair(){
+  if(seaMonsterLairs.length >= 4) return;
+  const faction = choice(SEA_MONSTER_FACTIONS);
+  const pp = playerXY();
+  const a = rand(0, Math.PI*2);
+  const r = rand(1800, 3200);
+  const px = pp.x + Math.cos(a)*r, py = pp.y + Math.sin(a)*r;
+  if(isLand(px, py)) { seaMonsterLairCooldown = 10; return; }
+
+  const lair = { x: px, y: py, r: 280, faction, alive: true, cd: 12, kingAlive: true, name: faction.name };
+  seaMonsterLairs.push(lair);
+
+  // 生成小弟
+  for(let i=0; i<faction.count; i++){
+    const mt = choice(faction.minions);
+    const m = SEA_MONSTER_TYPES[mt];
+    seaMonsters.push({
+      type: mt, x: px+rand(-160,160), y: py+rand(-160,160), vx:0, vy:0,
+      hp: m.hp, maxhp: m.hp, atk: m.atk, speed: m.sp, range: m.range,
+      cd: m.cd, size: m.size, color: faction.color, flash:0, angle:0, dead:false, phase:0,
+      lair: lair, factionName: faction.name
+    });
+  }
+  // 生成海王首领
+  const mk = SEA_MONSTER_TYPES.sea_king;
+  const king = {
+    type: 'sea_king', x: px, y: py, vx:0, vy:0,
+    hp: mk.hp*1.5, maxhp: mk.hp*1.5, atk: mk.atk+5, speed: mk.sp,
+    range: mk.range, cd: mk.cd, size: mk.size*1.2, color: faction.color,
+    flash:0, angle:0, dead:false, phase:0, lair: lair, isLeader: true,
+    leaderName: faction.leader, factionName: faction.name
+  };
+  seaMonsters.push(king);
+  floatText(pp.x, pp.y-55, '🌊 '+faction.icon+' '+faction.name+' 海怪巢穴出现！', faction.color);
+  for(let i=0;i<25;i++) particles.push(mkParticle(px+rand(-80,80), py+rand(-80,80), faction.color));
+}
+let seaMonsterLairCooldown = 45;
+
 // 散落武器池
 const GROUND_WEAPON_POOL = ['knife','spear','axe','cutlass','bow','pistol','flask','handgun','gatling','rifle','rpg'];
 
@@ -374,6 +423,7 @@ function resetGame(){
   landAnimals = []; treasureChests = []; enemyIslands = {}; pirateKingdoms = [];
   boardedPirates = []; seaMonsters = []; groundWeapons = [];
   seaKing = null; seaKingCooldown = 90;
+  seaMonsterLairs = []; seaMonsterLairCooldown = 30;
   kills = 0; nextElite = 10; milestone = 0; spawnTimer = 1.5; shipSpawnTimer = 3; worldTime = 0.06;
   weather = { type:'clear', t:20, rain:0, wind:0, thunder:0 }; lightning = 0;
   inventory = { wood:0, food:0, gold:500, iron:0, powder:0, steel:0, parts:0, tire:0, aluminum:0, timber:0 };
@@ -501,7 +551,7 @@ function updateBirds(dt){
       if(overLand!==want){ const a=Math.atan2(b.vy,b.vx)+Math.PI*rand(0.6,1.4); b.vx=Math.cos(a)*m.speed; b.vy=Math.sin(a)*m.speed; }
     }
   }
-  birds = birds.filter(b=>!b.dead && dist(b.x,b.y,pp.x,pp.y)<2400);
+  var _o=0; for(let _i=0;_i<birds.length;_i++) if(!birds[_i].dead && dist(birds[_i].x,birds[_i].y,pp.x,pp.y)<2400) birds[_o++]=birds[_i]; birds.length=_o;
   if(birds.length<10 && Math.random()<0.05) spawnBird(pp.x,pp.y);
 }
 function catchBird(b, method){
@@ -905,7 +955,7 @@ function updateLandAnimals(dt){
   }
   const pp = playerXY();
   if(landAnimals.length < 35 && Math.random()<0.025) spawnLandAnimal(pp.x, pp.y);
-  landAnimals = landAnimals.filter(a => !a.dead && (a._nest || a.type==='dragonKing' || dist(a.x, a.y, pp.x, pp.y) < 3000));
+  var _o=0; for(let _i=0;_i<landAnimals.length;_i++){ const a=landAnimals[_i]; if(!a.dead && (a._nest || a.type==='dragonKing' || dist(a.x,a.y,pp.x,pp.y)<3000)) landAnimals[_o++]=a; } landAnimals.length=_o;
 }
 function drawLandAnimals(){
   for(const a of landAnimals){
@@ -1876,7 +1926,13 @@ function killSeaMonster(sm){
   if(sm.type==='sea_king'){
     seaKing = null;
     seaKingCooldown = 120;
-    floatText(sm.x, sm.y-78, '👑 海王陨落! 海域清净 120s', '#ffd27a');
+    // 阵营海王
+    if(sm.isLeader && sm.lair){
+      floatText(sm.x, sm.y-78, '👑 '+sm.leaderName+' 陨落! ['+sm.factionName+']', sm.color);
+      sm.lair.cd = 0; // 立即触发复活计时
+    } else {
+      floatText(sm.x, sm.y-78, '👑 海王陨落! 海域清净 120s', '#ffd27a');
+    }
     for(let i=0;i<40;i++) particles.push(mkParticle(sm.x, sm.y, '#ffd27a'));
     inventory.parts += 10; inventory.steel += 20;
     floatText(sm.x, sm.y-94, '🔧+10 ⚙️+20','#9be8b4');
@@ -1980,7 +2036,7 @@ function updateMyShips(dt){
         projectiles.push({ x:ms.x+Math.cos(a)*24, y:ms.y+Math.sin(a)*24, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, dmg:38+ship.level*4, from:'ally', ship:true, aoe:0, life:1.8, color:'#9be8b4' }); }
     }
   }
-  myShips = myShips.filter(s=>!s.dead);
+  var _o=0; for(let _i=0;_i<myShips.length;_i++) if(!myShips[_i].dead) myShips[_o++]=myShips[_i]; myShips.length=_o;
 }
 // 主船自动炮击：船长不在船上时，舰炮照常开火（海盗船优先，其次炮轰岸上海盗）
 function updateShipAuto(dt){
@@ -2078,7 +2134,7 @@ function updateWeather(dt){
     }
   }
   ship.submerged = shipInWhirl;
-  whirls = whirls.filter(w=>w.life>0);
+  var _o=0; for(let _i=0;_i<whirls.length;_i++) if(whirls[_i].life>0) whirls[_o++]=whirls[_i]; whirls.length=_o;
   for(const cp of camps){ cp.phase += dt; }
 }
 
@@ -2121,7 +2177,7 @@ function updateCreatures(dt){
     if(c.type==='whale' && Math.random()<0.008){ for(let i=0;i<6;i++) particles.push(mkParticle(c.x+rand(-6,6), c.y-(c.size||40)*0.5, '#cfe8ff')); }
   }
   if(creatures.length<14 && Math.random()<0.03){ const pp=playerXY(); spawnCreature(pp.x,pp.y); }
-  creatures = creatures.filter(c=>!c.dead);
+  var _o=0; for(let _i=0;_i<creatures.length;_i++) if(!creatures[_i].dead) creatures[_o++]=creatures[_i]; creatures.length=_o;
 }
 
 // ========== v22 海怪系统 ==========
@@ -2159,12 +2215,15 @@ function spawnSeaKing(){
 }
 
 function updateSeaMonsters(dt){
+  const pp=playerXY();
   for(const sm of seaMonsters){
     if(sm.dead) continue;
+    const d = dist(sm.x, sm.y, pp.x, pp.y);
+    // 远距海怪跳过（仅保留位置衰减）
+    if(d > 3000){ sm.dead=true; continue; }
+    if(d > 2000){ sm.phase += dt; continue; }
     if(sm.flash>0) sm.flash-=dt;
     sm.phase += dt;
-    const pp = playerXY();
-    const d = dist(sm.x, sm.y, pp.x, pp.y);
     if(sm.cd>0) sm.cd-=dt;
     // 巡逻 + 追击
     if(d < 1800){
@@ -2174,7 +2233,7 @@ function updateSeaMonsters(dt){
       sm.vx = Math.cos(ta)*sm.speed; sm.vy = Math.sin(ta)*sm.speed;
       sm.angle = ta;
       if(sm.cd<=0 && dist(sm.x, sm.y, tx, ty) < sm.range){
-        sm.cd = m.cd;
+        sm.cd = SEA_MONSTER_TYPES[sm.type]?.cd ?? 0.8;
         if(sm.type==='merman' || sm.type==='sea_serpent' || sm.type==='sea_king'){
           // 远程攻击：水弹/水柱
           const pa = Math.atan2(ty-sm.y, tx-sm.x);
@@ -2208,13 +2267,49 @@ function updateSeaMonsters(dt){
     // 远离回收
     if(d > 3500){ sm.dead = true; }
   }
-  seaMonsters = seaMonsters.filter(sm=>!sm.dead);
-  // 生成控制
-  if(seaMonsters.length < 3 && Math.random() < 0.004){ const pp=playerXY(); spawnSeaMonster(); }
-  // 海王刷新
-  if(!seaKing && seaKingCooldown > 0){
-    seaKingCooldown -= dt;
-    if(seaKingCooldown <= 0) spawnSeaKing();
+  var _o=0; for(let _i=0;_i<seaMonsters.length;_i++) if(!seaMonsters[_i].dead) seaMonsters[_o++]=seaMonsters[_i]; seaMonsters.length=_o;
+  // 独立海怪（非阵营）随机生成
+  if(seaMonsters.length < 4 && Math.random() < 0.003){ const pp=playerXY(); spawnSeaMonster(); }
+  // 海怪巢穴刷新
+  seaMonsterLairCooldown -= dt;
+  if(seaMonsterLairCooldown <= 0){ seaMonsterLairCooldown = rand(30, 50); spawnSeaMonsterLair(); }
+  // 巢穴海王复活
+  for(const lair of seaMonsterLairs){
+    const hasKing = seaMonsters.some(sm => sm.lair === lair && sm.isLeader && !sm.dead);
+    if(!hasKing && lair.alive){ lair.cd -= dt; if(lair.cd <= 0){ lair.cd = rand(20, 30); lair.kingAlive = false; spawnLairKing(lair); } }
+    // 巢穴小弟补充
+    const hasMinions = seaMonsters.some(sm => sm.lair === lair && !sm.isLeader && !sm.dead);
+    if(!hasMinions && lair.alive){ lair.cd -= dt; if(lair.cd <= 0){ lair.cd = rand(15, 20); respawnLairMinions(lair); } }
+  }
+  // 远处巢穴回收
+  let _lo=0; for(let _li=0;_li<seaMonsterLairs.length;_li++){ if(dist(seaMonsterLairs[_li].x,seaMonsterLairs[_li].y,pp.x,pp.y)<4000) seaMonsterLairs[_lo++]=seaMonsterLairs[_li]; } seaMonsterLairs.length=_lo;
+}
+
+// 海怪巢穴海王复活
+function spawnLairKing(lair){
+  const m = SEA_MONSTER_TYPES.sea_king;
+  seaMonsters.push({
+    type: 'sea_king', x: lair.x+rand(-40,40), y: lair.y+rand(-40,40), vx:0, vy:0,
+    hp: m.hp*1.5, maxhp: m.hp*1.5, atk: m.atk+5, speed: m.sp,
+    range: m.range, cd: m.cd, size: m.size*1.2, color: lair.faction.color,
+    flash:0, angle:0, dead:false, phase:0, lair: lair, isLeader: true,
+    leaderName: lair.faction.leader, factionName: lair.faction.name
+  });
+  lair.kingAlive = true;
+  floatText(lair.x, lair.y-lair.r-15, '👑 '+lair.faction.leader+' 复活！', lair.faction.color);
+}
+// 巢穴小弟补充
+function respawnLairMinions(lair){
+  const f = lair.faction;
+  for(let i=0; i<f.count; i++){
+    const mt = choice(f.minions);
+    const m = SEA_MONSTER_TYPES[mt];
+    seaMonsters.push({
+      type: mt, x: lair.x+rand(-160,160), y: lair.y+rand(-160,160), vx:0, vy:0,
+      hp: m.hp, maxhp: m.hp, atk: m.atk, speed: m.sp, range: m.range,
+      cd: m.cd, size: m.size, color: f.color, flash:0, angle:0, dead:false, phase:0,
+      lair: lair, factionName: f.name
+    });
   }
 }
 // 绘制海怪（含海王）
@@ -2286,9 +2381,15 @@ function drawSeaMonsters(){
         for(let i=-1;i<=1;i++){ ctx.beginPath(); ctx.moveTo(-sm.size*0.06, sm.size*0.02*i); ctx.lineTo(sm.size*0.06, sm.size*0.02*i); ctx.stroke(); }
         ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-sm.size*0.02, -sm.size*0.26, sm.size*0.08, sm.size*0.06);
         ctx.restore();
-        // BOSS 标识
+        // BOSS 标识 + 阵营首领名
         ctx.fillStyle = '#ffd27a'; ctx.font='bold 12px Segoe UI'; ctx.textAlign='center';
         ctx.fillText('BOSS', 0, -sm.size*0.78);
+        if(sm.isLeader){
+          ctx.fillStyle = sm.color; ctx.font='bold 11px Segoe UI';
+          ctx.fillText(sm.leaderName, 0, -sm.size*0.66);
+          ctx.font='10px Segoe UI'; ctx.fillStyle='rgba(255,255,255,0.7)';
+          ctx.fillText(sm.factionName, 0, -sm.size*0.54);
+        }
         ctx.textAlign='left';
       }
     }
@@ -2336,7 +2437,7 @@ function updateGroundWeapons(dt){
     }
   }
   const pp = playerXY();
-  groundWeapons = groundWeapons.filter(g => dist(g.x, g.y, pp.x, pp.y) < 3000);
+  var _o=0; for(let _i=0;_i<groundWeapons.length;_i++) if(dist(groundWeapons[_i].x,groundWeapons[_i].y,pp.x,pp.y)<3000) groundWeapons[_o++]=groundWeapons[_i]; groundWeapons.length=_o;
   if(groundWeapons.length < 20 && Math.random() < 0.01) spawnGroundWeapons();
 }
 function drawGroundWeapons(){
@@ -2532,7 +2633,7 @@ function update(dt){
     }
     keepOutsideWalls(p);
   }
-  pirates = pirates.filter(p=>!p.dead);
+  var _o=0; for(let _i=0;_i<pirates.length;_i++) if(!pirates[_i].dead) pirates[_o++]=pirates[_i]; pirates.length=_o;
 
   // 海盗船 AI：攻击最近的主船 / 我方战船
   for(const s of pirateShips){
@@ -2578,7 +2679,7 @@ function update(dt){
     }
     keepOutsideWalls(s);
   }
-  pirateShips = pirateShips.filter(s=>!s.dead);
+  var _o=0; for(let _i=0;_i<pirateShips.length;_i++) if(!pirateShips[_i].dead) pirateShips[_o++]=pirateShips[_i]; pirateShips.length=_o;
 
   // 弹道
   for(const pr of projectiles){
@@ -2670,12 +2771,11 @@ function update(dt){
     }
     if(Math.abs(pr.x)>WORLD_LIMIT||Math.abs(pr.y)>WORLD_LIMIT) pr.life=0;
   }
-  projectiles = projectiles.filter(p=>p.life>0);
-  // 限制弹道数量，防止弹道过多拖慢（优先保留高伤害弹道）
-  if(projectiles.length > 200){
-    projectiles.sort((a,b)=>(b.dmg||0)-(a.dmg||0));
-    projectiles.length = 200;
-  }
+  // 弹道回收（原地压缩，避免每帧分配新数组）
+  var _o=0;
+  for(let _i=0; _i<projectiles.length; _i++) if(projectiles[_i].life>0) projectiles[_o++]=projectiles[_i];
+  projectiles.length=_o;
+  if(projectiles.length>200) projectiles.length=200;
 
   updateFollowers(dt);
   updateMyShips(dt);
@@ -2693,16 +2793,16 @@ function update(dt){
 
   // 物资刷新
   for(const n of nodes){ if(n.amount<=0 && n.respawn>0){ n.respawn-=dt; if(n.respawn<=0) n.amount=NODE_TYPES[n.type].amount; } }
-  // 无限地图：回收远离玩家的实体 + 周边补给
+  // 无限地图：回收远离玩家的实体（原地压缩，零分配）
   const pp=playerXY();
-  pirates = pirates.filter(p=>dist(p.x,p.y,pp.x,pp.y)<2600);
-  pirateShips = pirateShips.filter(s=>dist(s.x,s.y,pp.x,pp.y)<3200);
-  creatures = creatures.filter(c=>dist(c.x,c.y,pp.x,pp.y)<2200);
-  nodes = nodes.filter(n=>dist(n.x,n.y,pp.x,pp.y)<2200);
-  whirls = whirls.filter(w=>dist(w.x,w.y,pp.x,pp.y)<2600);
-  birds = birds.filter(b=>dist(b.x,b.y,pp.x,pp.y)<2400);
-  wrecks = wrecks.filter(w=>dist(w.x,w.y,pp.x,pp.y)<3000);
-  vehicles = vehicles.filter(v=>dist(v.x,v.y,pp.x,pp.y)<3200);
+  var _o=0; for(let _i=0;_i<pirates.length;_i++){ if(dist(pirates[_i].x,pirates[_i].y,pp.x,pp.y)<2600) pirates[_o++]=pirates[_i]; } pirates.length=_o;
+  _o=0; for(let _i=0;_i<pirateShips.length;_i++){ if(dist(pirateShips[_i].x,pirateShips[_i].y,pp.x,pp.y)<3200) pirateShips[_o++]=pirateShips[_i]; } pirateShips.length=_o;
+  _o=0; for(let _i=0;_i<creatures.length;_i++){ if(dist(creatures[_i].x,creatures[_i].y,pp.x,pp.y)<2200) creatures[_o++]=creatures[_i]; } creatures.length=_o;
+  _o=0; for(let _i=0;_i<nodes.length;_i++){ if(dist(nodes[_i].x,nodes[_i].y,pp.x,pp.y)<2200) nodes[_o++]=nodes[_i]; } nodes.length=_o;
+  _o=0; for(let _i=0;_i<whirls.length;_i++){ if(dist(whirls[_i].x,whirls[_i].y,pp.x,pp.y)<2600) whirls[_o++]=whirls[_i]; } whirls.length=_o;
+  _o=0; for(let _i=0;_i<birds.length;_i++){ if(dist(birds[_i].x,birds[_i].y,pp.x,pp.y)<2400) birds[_o++]=birds[_i]; } birds.length=_o;
+  _o=0; for(let _i=0;_i<wrecks.length;_i++){ if(dist(wrecks[_i].x,wrecks[_i].y,pp.x,pp.y)<3000) wrecks[_o++]=wrecks[_i]; } wrecks.length=_o;
+  _o=0; for(let _i=0;_i<vehicles.length;_i++){ if(dist(vehicles[_i].x,vehicles[_i].y,pp.x,pp.y)<3200) vehicles[_o++]=vehicles[_i]; } vehicles.length=_o;
   if(nodes.filter(n=>n.amount>0).length < 60 && Math.random()<0.02) spawnNode(pp.x,pp.y);
   // 废墟刷新（海上船骸 / 岸上车·飞机骸）
   wreckTimer-=dt;
@@ -2728,11 +2828,11 @@ function update(dt){
   }
 
   for(const pa of particles){ pa.x+=pa.vx*dt; pa.y+=pa.vy*dt; pa.vx*=0.92; pa.vy*=0.92; pa.life-=dt; }
-  particles=particles.filter(p=>p.life>0);
+  var _o=0; for(let _i=0;_i<particles.length;_i++) if(particles[_i].life>0) particles[_o++]=particles[_i]; particles.length=_o;
   // 限制粒子数量，防止过多拖慢渲染
   if(particles.length > 600){ particles.length = 600; }
   for(const t of texts){ t.y-=22*dt; t.life-=dt; }
-  texts=texts.filter(t=>t.life>0);
+  var _o=0; for(let _i=0;_i<texts.length;_i++) if(texts[_i].life>0) texts[_o++]=texts[_i]; texts.length=_o;
 
   equipBurnTick(dt);
   updateKingdom(dt);
@@ -2777,30 +2877,32 @@ function render(){
     drawIslandShape(ctx, {x:is.x,y:is.y,r:is.r*0.55}, '#356b35');
     ctx.restore();
   }
-  for(const n of nodes){ if(n.amount<=0) continue; drawNode(n); }
-  for(const cp of camps) drawCamp(cp);
-  for(const c of creatures) drawCreature(c);
-  for(const w of wrecks) drawWreck(w);
-  for(const w of whirls) drawWhirl(w);
-  for(const key in ownedIslands) drawOwnedIsland(ownedIslands[key]);
-  // 敌方领地绘制
-  for(const key in enemyIslands) drawEnemyIsland(enemyIslands[key]);
-  for(const s of pirateShips) drawPirateShip(s);
-  for(const ms of myShips) drawMyShip(ms);
-  for(const pr of projectiles){
+  // 视口裁剪辅助：offscreen 则跳过绘制
+  const _vw=W+40, _vh=H+40;
+  function _vis(x,y){ const sx=x-cam.x, sy=y-cam.y; return sx>-40&&sx<_vw&&sy>-40&&sy<_vh; }
+
+  for(const n of nodes){ if(n.amount<=0) continue; if(!_vis(n.x,n.y)) continue; drawNode(n); }
+  for(const cp of camps){ if(!_vis(cp.x,cp.y)) continue; drawCamp(cp); }
+  for(const c of creatures){ if(!_vis(c.x,c.y)) continue; drawCreature(c); }
+  for(const w of wrecks){ if(!_vis(w.x,w.y)) continue; drawWreck(w); }
+  for(const w of whirls){ if(!_vis(w.x,w.y)) continue; drawWhirl(w); }
+  for(const key in ownedIslands){ const isl=ownedIslands[key]; if(!_vis(isl.x,isl.y,isl.r)) continue; drawOwnedIsland(isl); }
+  for(const key in enemyIslands){ const isl=enemyIslands[key]; if(!_vis(isl.x,isl.y,isl.r)) continue; drawEnemyIsland(isl); }
+  for(const s of pirateShips){ if(!_vis(s.x,s.y)) continue; drawPirateShip(s); }
+  for(const ms of myShips){ if(!_vis(ms.x,ms.y)) continue; drawMyShip(ms); }
+  for(const pr of projectiles){ if(!_vis(pr.x,pr.y)) continue;
     ctx.beginPath(); ctx.arc(pr.x,pr.y,pr.aoe>0?5:3.5,0,Math.PI*2); ctx.fillStyle=pr.color; ctx.fill();
     if(pr.aoe>0){ ctx.beginPath(); ctx.arc(pr.x,pr.y,pr.aoe,0,Math.PI*2); ctx.strokeStyle='rgba(255,180,90,.25)'; ctx.stroke(); }
   }
-  // 王国围栏+王旗
   drawKingdom(ctx);
   drawPirateKingdoms();
-  for(const p of pirates) drawPirate(p);
-  for(const f of followers){ if(!f.downed) drawFollower(f); }
-  for(const key in ownedIslands) for(const s of ownedIslands[key].soldiers) drawFollower(s);
+  for(const p of pirates){ if(!_vis(p.x,p.y)) continue; drawPirate(p); }
+  for(const f of followers){ if(!f.downed && _vis(f.x,f.y)) drawFollower(f); }
+  for(const key in ownedIslands) for(const s of ownedIslands[key].soldiers) if(_vis(s.x,s.y)) drawFollower(s);
   drawKingdomNPCs(ctx);
-  for(const v of vehicles) drawVehicle(v);
+  for(const v of vehicles){ if(!_vis(v.x,v.y)) continue; drawVehicle(v); }
   if(captain.onShip) drawShip(true); else { if(captain.riding) drawVehicle(captain.riding); else drawCaptain(); drawShip(false); }
-  for(const b of birds) drawBird(b);
+  for(const b of birds){ if(!_vis(b.x,b.y)) continue; drawBird(b); }
   drawLandAnimals();
   drawDragonNests();
   drawSeaMonsters();
@@ -2809,11 +2911,11 @@ function render(){
   if(captain.onShip) drawCannonAim();
   drawBoardedPirates();
 
-  for(const pa of particles){ ctx.globalAlpha=Math.max(0,pa.life*1.4); ctx.fillStyle=pa.color;
+  for(const pa of particles){ if(!_vis(pa.x,pa.y)) continue; ctx.globalAlpha=Math.max(0,pa.life*1.4); ctx.fillStyle=pa.color;
     ctx.beginPath(); ctx.arc(pa.x,pa.y,2.5,0,Math.PI*2); ctx.fill(); }
   ctx.globalAlpha=1;
   ctx.font='bold 14px Segoe UI, sans-serif'; ctx.textAlign='center';
-  for(const t of texts){ ctx.globalAlpha=Math.min(1,t.life); ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y); }
+  for(const t of texts){ if(!_vis(t.x,t.y)) continue; ctx.globalAlpha=Math.min(1,t.life); ctx.fillStyle=t.color; ctx.fillText(t.txt,t.x,t.y); }
   ctx.globalAlpha=1; ctx.textAlign='left';
   ctx.restore();
 
