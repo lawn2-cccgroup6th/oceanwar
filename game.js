@@ -378,7 +378,7 @@ function spawnSeaMonsterLair(){
   floatText(pp.x, pp.y-55, '🌊 '+faction.icon+' '+faction.name+' 海怪巢穴出现！', faction.color);
   for(let i=0;i<25;i++) particles.push(mkParticle(px+rand(-80,80), py+rand(-80,80), faction.color));
 }
-let seaMonsterLairCooldown = 45;
+let seaMonsterLairCooldown = 999; // 初始极大值，需击杀>=50后才刷新海怪巢穴
 
 // 散落武器池
 const GROUND_WEAPON_POOL = ['knife','spear','axe','cutlass','bow','pistol','flask','handgun','gatling','rifle','rpg'];
@@ -1176,7 +1176,8 @@ function spawnDragonKing(){
   const dx=isl.x+Math.cos(a)*rr, dy=isl.y+Math.sin(a)*rr;
   if(!isLand(dx, dy)) return;
   dragonKing = { type:'dragonKing', x:dx, y:dy, vx:0, vy:0, hp:2000, maxhp:2000, atk:60, speed:1.8, range:100, cd:0.5,
-    color:'#1a8b3a', size:40, flash:0, angle:a, face:Math.cos(a)>=0?1:-1, dead:false, _fireCd:0, _phase:0 };
+    color:'#1a8b3a', size:40, flash:0, angle:a, face:Math.cos(a)>=0?1:-1, dead:false, _fireCd:0, _phase:0,
+    nestX: isl.x, nestY: isl.y, nestR: isl.r };
   floatText(dx, dy-40, '🐲 东海龙王降临!!! 海域震颤!', '#1a8b3a');
   for(let i=0;i<40;i++) particles.push(mkParticle(dx, dy, choice(['#1a8b3a','#4aa8ff','#80d0ff'])));
   landAnimals.push(dragonKing);
@@ -1250,6 +1251,17 @@ function updateDragonNests(dt){
         dragonKing.patrolCd=rand(1,2.5);
       }
       dragonKing.x+=dragonKing.vx*dt*2; dragonKing.y+=dragonKing.vy*dt*2;
+      // 龙王限制在巢穴岛屿内，不可出去
+      if(dragonKing.nestX!==undefined){
+        const dx3=dragonKing.x-dragonKing.nestX, dy3=dragonKing.y-dragonKing.nestY;
+        const d3=Math.sqrt(dx3*dx3+dy3*dy3);
+        const maxR=dragonKing.nestR*0.75;
+        if(d3>maxR){
+          const ta=Math.atan2(-dy3,-dx3);
+          dragonKing.x=dragonKing.nestX+Math.cos(ta)*maxR*0.95;
+          dragonKing.y=dragonKing.nestY+Math.sin(ta)*maxR*0.95;
+        }
+      }
       dragonKing.face=dragonKing.vx>=0?1:-1;
     }
     // 血条显示
@@ -1263,8 +1275,13 @@ function drawDragonNests(){
     const vw=canvas.width/DPR, vh=canvas.height/DPR;
     if(sx<-nest.r-40||sx>vw+nest.r+40||sy<-nest.r-40||sy>vh+nest.r+40) continue;
     ctx.save();
+    // 领地范围圈（脉冲）
+    const pulse=Math.sin(nest.phase)*0.08+1;
+    ctx.strokeStyle='rgba(30,140,80,0.4)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(nest.x, nest.y, nest.r*0.7*pulse, 0, Math.PI*2); ctx.stroke();
+    ctx.strokeStyle='rgba(80,200,255,0.25)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(nest.x, nest.y, nest.r*0.55*pulse, 0, Math.PI*2); ctx.stroke();
     // 水池
-    const pulse=Math.sin(nest.phase)*0.1+1;
     ctx.fillStyle='rgba(30,120,200,0.35)';
     ctx.beginPath(); ctx.ellipse(nest.x, nest.y, nest.r*0.35*pulse, nest.r*0.25*pulse, 0, 0, Math.PI*2); ctx.fill();
     // 水波环
@@ -1279,12 +1296,14 @@ function drawDragonNests(){
       ctx.lineTo(nest.x+rand(-nest.r*0.2,nest.r*0.2), nest.y+rand(-nest.r*0.15,nest.r*0.15));
       ctx.closePath(); ctx.fill();
     }
-    // 标记
+    // 营地标记
     ctx.font='bold 12px Segoe UI'; ctx.textAlign='center'; ctx.fillStyle='#4aa8ff';
-    ctx.fillText('💧 青龙巢', nest.x, nest.y-nest.r*0.35-12);
+    ctx.fillText('🐲 青龙营地', nest.x, nest.y-nest.r*0.35-12);
+    ctx.font='10px Segoe UI'; ctx.fillStyle='#1a8b3a';
+    ctx.fillText('⚔️ 青龙族群', nest.x, nest.y-nest.r*0.35);
     const alive=nest.guards.filter(g=>!g.dead).length;
-    ctx.font='10px Segoe UI'; ctx.fillStyle='#aae0ff';
-    ctx.fillText('守卫 '+alive+' 条', nest.x, nest.y-nest.r*0.35-2);
+    ctx.fillStyle='#aae0ff';
+    ctx.fillText('守卫 '+alive+' 条', nest.x, nest.y-nest.r*0.35+12);
     ctx.textAlign='left'; ctx.restore();
   }
 }
@@ -1925,13 +1944,17 @@ function killSeaMonster(sm){
   // 海王BOSS特殊奖励
   if(sm.type==='sea_king'){
     seaKing = null;
-    seaKingCooldown = 120;
+    // 海怪boss被杀 → 所有海怪消失
+    for(let i=0; i<seaMonsters.length; i++) seaMonsters[i].dead = true;
+    seaMonsters.length = 0;
     // 阵营海王
     if(sm.isLeader && sm.lair){
-      floatText(sm.x, sm.y-78, '👑 '+sm.leaderName+' 陨落! ['+sm.factionName+']', sm.color);
-      sm.lair.cd = 0; // 立即触发复活计时
+      floatText(sm.x, sm.y-78, '👑 '+sm.leaderName+' 陨落! '+sm.factionName+' 全族溃散!', sm.color);
+      floatText(sm.x, sm.y-94, '🌊 海域清静!', '#4aa8ff');
+      sm.lair.alive = false;
     } else {
       floatText(sm.x, sm.y-78, '👑 海王陨落! 海域清净 120s', '#ffd27a');
+      seaKingCooldown = 120;
     }
     for(let i=0;i<40;i++) particles.push(mkParticle(sm.x, sm.y, '#ffd27a'));
     inventory.parts += 10; inventory.steel += 20;
@@ -2295,6 +2318,17 @@ function updateSeaMonsters(dt){
       sm.vy = sm.vy*0.95 + Math.sin(animT+sm.phase)*0.3;
     }
     sm.x += sm.vx*dt*30; sm.y += sm.vy*dt*30;
+    // 阵营boss限制在巢穴半径内，不可出去
+    if(sm.isLeader && sm.lair){
+      const dx2=sm.x-sm.lair.x, dy2=sm.y-sm.lair.y;
+      const d2=Math.sqrt(dx2*dx2+dy2*dy2);
+      const maxR=sm.lair.r*0.7;
+      if(d2>maxR){
+        const ta=Math.atan2(-dy2,-dx2);
+        sm.x=sm.lair.x+Math.cos(ta)*maxR*0.95;
+        sm.y=sm.lair.y+Math.sin(ta)*maxR*0.95;
+      }
+    }
     sm.x = clamp(sm.x, -WORLD_LIMIT, WORLD_LIMIT);
     sm.y = clamp(sm.y, -WORLD_LIMIT, WORLD_LIMIT);
     // 远离回收
@@ -2303,9 +2337,9 @@ function updateSeaMonsters(dt){
   var _o=0; for(let _i=0;_i<seaMonsters.length;_i++) if(!seaMonsters[_i].dead) seaMonsters[_o++]=seaMonsters[_i]; seaMonsters.length=_o;
   // 独立海怪（非阵营）随机生成
   if(seaMonsters.length < 4 && Math.random() < 0.003){ const pp=playerXY(); spawnSeaMonster(); }
-  // 海怪巢穴刷新
+  // 海怪巢穴刷新（仅在玩家击杀>=50后才出现海怪boss阵营）
   seaMonsterLairCooldown -= dt;
-  if(seaMonsterLairCooldown <= 0){ seaMonsterLairCooldown = rand(30, 50); spawnSeaMonsterLair(); }
+  if(kills >= 50 && seaMonsterLairCooldown <= 0){ seaMonsterLairCooldown = rand(60, 90); spawnSeaMonsterLair(); }
   // 巢穴海王复活
   for(const lair of seaMonsterLairs){
     const hasKing = seaMonsters.some(sm => sm.lair === lair && sm.isLeader && !sm.dead);
