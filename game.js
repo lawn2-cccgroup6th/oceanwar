@@ -2196,7 +2196,7 @@ function spawnSeaMonster(){
     range:m.range, cd:m.cd, size:m.size, color:m.color, flash:0, angle:0, dead:false, phase:0
   });
 }
-// 生成海王BOSS
+// 海王BOSS（旧版独立海王，仅保留兼容）
 function spawnSeaKing(){
   const m = SEA_MONSTER_TYPES.sea_king;
   const pp = playerXY();
@@ -2212,6 +2212,39 @@ function spawnSeaKing(){
   seaMonsters.push(sk);
   floatText(pp.x, pp.y-60, '👑 海王已出现!', '#ffd27a');
   for(let i=0;i<30;i++) particles.push(mkParticle(px, py, '#ffd27a'));
+}
+
+// 巢穴海王复活
+function spawnLairKing(lair){
+  const mk = SEA_MONSTER_TYPES.sea_king;
+  const king = {
+    type:'sea_king', x:lair.x+rand(-80,80), y:lair.y+rand(-80,80), vx:0, vy:0,
+    hp:mk.hp*1.5, maxhp:mk.hp*1.5, atk:mk.atk+5, speed:mk.sp,
+    range:mk.range, cd:mk.cd, size:mk.size*1.2, color:lair.faction.color,
+    flash:0, angle:0, dead:false, phase:0, lair: lair, isLeader:true,
+    leaderName: lair.faction.leader, factionName: lair.faction.name
+  };
+  seaMonsters.push(king);
+  floatText(lair.x, lair.y-lair.r-20, '👑 '+lair.faction.icon+' '+lair.faction.leader+' 复活!', lair.faction.color);
+  for(let i=0;i<20;i++) particles.push(mkParticle(lair.x, lair.y, lair.faction.color));
+}
+
+// 巢穴小弟补充
+function respawnLairMinions(lair){
+  const faction = lair.faction;
+  const count = rand(3, 5);
+  for(let i=0; i<count; i++){
+    const mt = choice(faction.minions);
+    const m = SEA_MONSTER_TYPES[mt];
+    if(!m) continue;
+    seaMonsters.push({
+      type:mt, x:lair.x+rand(-180,180), y:lair.y+rand(-180,180), vx:0, vy:0,
+      hp:m.hp, maxhp:m.hp, atk:m.atk, speed:m.sp, range:m.range,
+      cd:m.cd, size:m.size, color:faction.color, flash:0, angle:0, dead:false, phase:0,
+      lair: lair, factionName: faction.name
+    });
+  }
+  floatText(lair.x, lair.y-lair.r-36, '🌊 '+faction.icon+' '+faction.name+' 补充兵力', faction.color);
 }
 
 function updateSeaMonsters(dt){
@@ -2246,7 +2279,7 @@ function updateSeaMonsters(dt){
         } else if(captain.onShip){
           // 攻击船
           ship.hp -= sm.atk; sm.flash=0.15;
-          floatText(ship.x, ship.y-30, sm.name?'🌊 '+SEA_MONSTER_TYPES[sm.type].name+' 攻击! -'+sm.atk:'🌊 海怪攻击! -'+sm.atk, sm.color);
+          floatText(ship.x, ship.y-30, (sm.leaderName||SEA_MONSTER_TYPES[sm.type]?.name||'海怪')+' 攻击! -'+sm.atk, sm.color);
           if(ship.hp<=0) endGame(false);
         } else if(!captain.onShip && dist(sm.x, sm.y, captain.x, captain.y) < sm.range){
           captain.hp -= sm.atk; sm.flash=0.15;
@@ -2879,7 +2912,7 @@ function render(){
   }
   // 视口裁剪辅助：offscreen 则跳过绘制
   const _vw=W+40, _vh=H+40;
-  function _vis(x,y){ const sx=x-cam.x, sy=y-cam.y; return sx>-40&&sx<_vw&&sy>-40&&sy<_vh; }
+  function _vis(x,y,r){ r=r||20; const sx=x-cam.x, sy=y-cam.y; return sx>-r&&sx<_vw+r&&sy>-r&&sy<_vh+r; }
 
   for(const n of nodes){ if(n.amount<=0) continue; if(!_vis(n.x,n.y)) continue; drawNode(n); }
   for(const cp of camps){ if(!_vis(cp.x,cp.y)) continue; drawCamp(cp); }
